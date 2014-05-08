@@ -1,0 +1,54 @@
+#!/usr/bin/python
+######################################################
+# A simple script to pull data out of VMPro          #
+# Written by: Rory A. Savage                         #
+######################################################
+import psycopg2
+import sys
+import csv
+import os
+import pandas as pd
+
+# Connect to the appliance database
+def firstconnection ():
+   os.system('/bin/rm -rf ./appliance.txt')
+   conn1 = psycopg2.connect("dbname=appliance user=root")
+   cur1 = conn1.cursor()
+   cur1.execute("select uuid, name from backup_policy;")
+   appliance_records = cur1.fetchall()
+   for appliance_item in appliance_records:
+      #print(appliance_item)
+      with open("appliance.txt", "a") as myfile1:
+         myfile1.write(','.join(appliance_item) + '\n')
+   cur1.close()
+   conn1.close()
+
+# Connect to the smr_8 database
+def secondconnection ():
+   os.system('/bin/rm -rf ./smr8.txt')
+   conn2 = psycopg2.connect("dbname=smr_8 user=root")
+   cur2 = conn2.cursor()
+   cur2.execute("select distinct on (vm_name) policy_id, split_part(vm_path, '/', 4) AS vm_name, split_part(vm_path, '/', 3) AS folder_name from vm_sync;")
+   smr_8_records = cur2.fetchall()
+   for smr_8_item in smr_8_records:
+      #print(smr_8_item)
+      with open("smr8.txt", "a") as myfile2:
+         myfile2.write(','.join(smr_8_item) + '\n')
+
+   cur2.close()
+   conn2.close()
+
+def buildjoin():
+   df1 = pd.read_csv('appliance.txt',sep=',')
+   df1.columns = [ 'uuid', 'policy' ]
+   df2 = pd.read_csv('smr8.txt',sep=',')
+   df2.columns = [ 'uuid', 'vmname', 'vmfolder' ]
+   df2 = df2.dropna(axis=1)
+   df = df1.merge(df2, on='uuid')
+   df.to_csv('policy-report.txt',index=False)
+   os.system('/bin/rm -rf ./appliance.txt')
+   os.system('/bin/rm -rf ./smr8.txt')
+
+firstconnection()
+secondconnection()
+buildjoin()
